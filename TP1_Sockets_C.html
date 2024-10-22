@@ -1,0 +1,124 @@
+<h1 id="tp1---programmation-avec-des-sockets-en-c">TP1 - Programmation avec des Sockets en C</h1>
+<h2 id="client---serveur-un-seul-client">1 - Client - Serveur : un seul client</h2>
+<p>Le serveur décide d’accepter les demandes de connection sur un port particulier, tandis que le client demander une connexion sur le serveur.</p>
+<p>Une fois la connexion établie, les deux programmes peuvent communiquer à l’aide de <code>read</code> et <code>write</code>, exactement de la même manière que lorsque l’on lit/écrit dans un fichier. Un exemple est fourni : le serveur <code>Exemple-simple/socket_srv.c</code> et le client <code>Exemple-simple/socket_clt.c</code>. Vous pourrez suivre les explications en lisant les sources fournis.</p>
+<blockquote>
+<p><strong>Exercice 1.</strong> Tester et comprendre chaque ligne de l’exemple.</p>
+<p>Modifiez les programmes pour qu’ils se terminent proprement par exemple quand le client entre le caractère fin de fichier <code>CTRL-D</code>.</p>
+</blockquote>
+<p>Compiler et exécuter l’exemple Pour tester l’exemple : compiler <code>socket_srv.c</code> et <code>socket_clt.c</code> :</p>
+<hr />
+<pre><code>     gcc socket_client.c -o socket_client
+     gcc socket_server.c -o socket_server</code></pre>
+<hr />
+<p>éxécuter le serveur sur une machine :</p>
+<hr />
+<pre><code>     ./socket_srv 9999
+</code></pre>
+<hr />
+<p>exécuter le client sur une autre machine (avec la machine de votre binôme par exemple) et ouvrir une connexion sur le serveur:</p>
+<hr />
+<pre><code>     ./socket_clt &lt;ip du serveur&gt; 9999 </code></pre>
+<hr />
+<h3 id="compréhension-du-fonctionnement-du-serveur">Compréhension du fonctionnement du serveur</h3>
+<p>Avant toute chose, de la même manière que lorsque l’on ouvre un fichier, le serveur se doit d’obtenir un identificateur de socket avec la fonction <code>socket() (</code>man 2 socket`).</p>
+<hr />
+<pre><code>     int socket(int family, int type, int protocol);</code></pre>
+<hr />
+<p>Cette fonction prend trois paramètres qui décrivent les protocoles utilisés.</p>
+<p>Le paramètre family (<code>AF_UNIX, AF_INET, AF_INET6, AF_IPX, AF_NETLINK, AF_X25, AF_AX25, AF_ATMPVC, AF_APPLETALK, AF_PACKET</code>) que nous fixons à <code>AF_INET</code> pour choisir le protocole de communication <code>IP</code>.</p>
+<p>Le paramètre <code>type</code> précise la couche transport. le couple <code>family/type</code> correspond généralement à un couple de protocoles réseau/transport (<code>TCP/IP</code> ou <code>UDP/IP</code>). Dans cet exemple c’est <code>TCP</code> qui est utilisé (<code>SOCK_STREAM</code> pour <code>TCP</code> et <code>SOCK_DGRAM</code>).</p>
+<p>Le dernier paramètre protocole, est un paramètre additionnel, que nous mettrons à 0. Socket renvoie alors un identificateur de socket que l’on utilisera par la suite.</p>
+<hr />
+<pre><code>     int bind(int sockfd, struct sockaddr *myaddr, int addrlen);</code></pre>
+<hr />
+<p>Le bind sert a indiquer au système la façon dont il doit accepter les connections de la part d’éventuels clients, il prend comme paramètre l’identificateur de socket <code>sockfd</code>, obtenu lors de l’ouverture du socket, ainsi qu’une structure de données <code>myaddr</code> spécifique au protocole utilisé contenant les informations nécessaire, ainsi que la taille addrlen de cette structure. Le bind revoie une valeur n ́gative s’il n’a pas pu s’effectuer correctement. Dans le cas de TCP il faut remplir une structure de type <code>sockaddr in</code>, en initialisant les champs <code>sin_family</code>, <code>sin_addr.s_addr</code> et <code>sin_port</code>. <code>* sin_family</code> est la famille utilisée, ici on utlise <code>AF_INET</code>. <code>* sin_addr.s_addr</code> indique les adresses d’où peuvent être acceptées les requêtes de connexion, dans notre cas on pourra utiliser la valeur <code>INADDR_ANY</code>. Cependant cette doit être convertie au bon format grâce à la fonction <code>htonl()</code>.</p>
+<ul class="incremental">
+<li><code>sin_port</code> est le numéro de port où doit être adressé la connexion, il suffit de choisir un nombre arbitraire plus grand que 1024 (les ports avec des numéros plus petits sont réservés pour des fonctions système). Cette valeur doit être également convertie au bon format grâce à la fonction <code>htons()</code>.</li>
+</ul>
+<p>Les autre champs de la structure doivent être initialisés à zéro (utiliser <code>memset()</code> ou <code>bzero()</code>).</p>
+<hr />
+<pre><code>     bzero((char*)&amp;serv_addr,sizeof(serv_addr));
+     serv_addr.sinfamily = AF_INET; 
+     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+     serv_addr.sin_port = htons(SERV_TCP_PORT);
+     int listen(int sockfd, int backlog);
+</code></pre>
+<hr />
+<p>le <code>listen</code> sert à spécifier le nombre de connections simultanées que le serveur peut accepter, la valeur la plus communément employée est 5 qui est la plus grande autorisée. <code>listen</code> revoie une valeur négative en cas de problème.</p>
+<hr />
+<pre><code>     int accept(int sockfd, struct sockaddr *peer, int *addrlen);</code></pre>
+<hr />
+<p>Le <code>accept()</code> est un fonction bloquante qui attend qu’une demande de connection arrive, lorsque c’est le cas, une copie du socket est effectuée et son identificateur est renvoyé. Cette manière de faire (copie du socket existant) peut paraître curieuse au premier abord mais elle est très utilisée en pratique lorsque l’on écrit un serveur capable d’accepter plusieurs connections simultanées.</p>
+<p>Les coordonnées de l’auteur de la requête se trouvent dans la structure peer au retour de la fonction accept, de même addrlen permet de connaitre la longueur de la structure en question. Noter que les transactions read/write devront se faire en utilisant l’identificateur de socket renvoyé par <code>accept()</code> et non pas celui renvoyé par <code>socket()</code></p>
+<p>Les <code>read/write</code> permettent ensuite de lire/écrire dans le socket. Ils s’utilisent exactement comme ceux des fichiers binaire, si ce n’est qu’ils utilisent un identificateur de socket au lieu d’un identificateur de fichier.</p>
+<hr />
+<pre><code>     int close(int sockfd);</code></pre>
+<hr />
+<p>Permet de fermer un socket. Il est conseillé de fermer un socket que l’on utilise plus.</p>
+<h3 id="le-client">Le client</h3>
+<p>La partie client est la partie qui effectue demande de connection, elle se programme en ouvrant tout d’abord une socket avec <code>socket()</code> de la même manière que le serveur, il s’agit ensuite d’établir la connection avec <code>connect()</code>.</p>
+<hr />
+<pre><code>     int connect(int sockfd, struct sockaddr *servaddr, int addrlen);</code></pre>
+<hr />
+<p><code>connect()</code> prend en paramètres, outre l’ID du socket, une structure qui lui indique où il doit essayer de se connecter, il y a trois valeurs à initialiser dans cette structure de type sockaddr (les autres doivent être mises à zéro).</p>
+<ul class="incremental">
+<li><code>sin_family</code> est la famille utilisée, ici <code>AF_INET</code></li>
+<li><code>sin_addr.s_addr</code> indique l’adresse du serveur, cette adresse est généralement connue sous forme texte (exemple: <code>10.9.185.203</code>) et doit être convertie en un entier grâce à la fonction `inet_addr().</li>
+<li><code>sin_port</code> est le numéro de port du serveur où doit aboutir la connection. Cette valeur doit être également convertie au bon format grace à la fonction <code>htons()</code>.</li>
+</ul>
+<p>Une fois la connection acceptée, le client n’a plus qu’à lire/écrire dedans et l’aide des fonctions <code>read()</code> et <code>write()</code> puis à le fermer à l’aide de <code>close()</code>.</p>
+<blockquote>
+<p><strong>Exercice 2.</strong> En vous inspirant de l’exemple précédent écrire un client pour le protocole <a href="https://fr.wikipedia.org/wiki/Time_Protocol">Time (RFC 868)</a>. Le client affichera la date.</p>
+</blockquote>
+<p>Vous pourrez tester des servers en libre accès dont une liste se trouve <a href="https://tf.nist.gov/tf-cgi/servers.cgi">ici</a> Attention, il y a plusieurs difficultés :</p>
+<ul class="incremental">
+<li>ce protocole retourne maintenant le temps sur 4 octets mais sur les machines 64bits les fonctions de conversions prennent en paramètre des entiers sur 8 octets… Les données reçues du serveur doivent donc être décodées et stockées dans des variables de type unsigned long int.</li>
+<li>pour assurer la portabilité de la représentation des nombres, un standard est fixé sur le réseau, il faut donc faire des conversions avant écriture et après lecture (cf. <code>man ntohl</code>).</li>
+<li>il y a plusieurs habitudes différentes pour indiquer une date (en secondes depuis 1er janvier 1970, depuis le 1er janvier 1900 à minuit UTC, … Pour information, il y a 2208988800s entre les deux).</li>
+<li>on peut utiliser la fonction <code>ctime</code> pour afficher la date. Attention, elle prend un paramètre de type <code>time_t</code> (codé sur 8 octets). Pour l’afficher avec <code>printf</code>, vous pouvez utiliser un cast vers un <code>unsigned long</code> ou bien le masque “<code>%zu</code>”.</li>
+</ul>
+<h2 id="clients---serveur-plusieurs-clients">2 - Clients - Serveur : plusieurs clients</h2>
+<p>Dans l’exercice précédent votre programme traite les clients les uns après les autres même si ces derniers se sont connectés au même moment au serveur. Généralement quand on développe un serveur on souhaite qu’il puisse dialoguer en simultané avec plusieurs clients. Pour cela après l’exécution de la primitive <code>accept</code> on utilise la primitive <code>fork</code> qui créé un processus ﬁls qui se chargera de la communication pendant que le père pourra retourner en attente sur <code>accept</code>. La syntaxe générale d’un serveur est donc :</p>
+<hr />
+<pre><code>while (1)
+{
+ scomm = accept(sd, NULL,NULL);
+ pid = fork();
+ if (pid == 0) /* c’est le fils */
+ {
+  close(sd); /* socket inutile pour le fils */
+  ...
+  /* traiter la communication */
+  ...
+  close(scomm);
+  exit(0); /* on force la terminaison du fils */
+ }
+ else /* c’est le pere */
+ {
+  close(scomm); /* socket inutile pour le pere */
+  ....
+ }
+}
+close(sd);
+</code></pre>
+<hr />
+<p>Remarque: Les processus fils qui se terminent deviennent zombies si dans le code du processus père on ne rajoute pas des instructions pour lui indiquer de lire le code retour de ses ﬁls. Pour éviter cette situation vous rajouterez ici (avant la boucle) l’instruction <code>signal(SIGCHLD,SIG_IGN)</code> qui a pour eﬀet sous Linux d’éliminer directement les processus qui se terminent sans les laisser dans l’état zombie (notez que cette façon de traiter la ﬁn des processus fils est déconseillée par la norme POSIX).</p>
+<blockquote>
+<p><strong>Exercice 3.</strong> Réécrivez le programme exemple (<code>socket_server</code> et <code>socket_client</code>) de façon à ce que les clients soient traités en parallèle par le serveur.</p>
+</blockquote>
+<blockquote>
+<p><strong>Exercice 4.</strong> Ecrire un programme qui lit le contenu d’une page web (avec http il suffit d’envoyer la requête <code>GET</code> puis sauter deux lignes donc deux “”). Un défi : dans la page reçue extraire les éléments <code>title</code>.</p>
+</blockquote>
+<blockquote>
+<p><strong>Exercice 5.</strong> Ecrire un programme qui renvoie la liste des ports TCP ouverts sur une machine dont on passera en paramètre, soit le nom (cf. <code>man gethostbyname</code>), soit l’adresse IP.</p>
+</blockquote>
+<h2 id="pour-aller-plus-loin-un-serveur-de-jeux---awale">3 - Pour aller plus loin : un serveur de Jeux - Awale</h2>
+<p>Le but est de réaliser un serveur qui permet à deux clients de jouer une partie d’Awale. Le serveur vérifie la validité des coups et compte les points. Les fonctionnalités minimales à implanter sont les suivantes:</p>
+<ol class="incremental" type="1">
+<li>Chaque client s’inscrit avec un pseudo.</li>
+<li>Chaque client peut demander au serveur la liste des pseudos libres</li>
+<li>Un client peut défier un autre client</li>
+<li>Quand une partie est créée, le serveur décide de qui commence par tirage au sort, et vérifie la légalité des coups joués. Le serveur maintient l’état du plateau et du score (qu’il envoie aux clients).</li>
+<li>Si vous avez une version qui fonctionne pour une partie vous pouvez ajouter comme commande un listing des parties en jeu et un mode “observateur” pour lequel le serveur envoie le plateau et le score.</li>
+</ol>
