@@ -10,11 +10,13 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <time.h>
 
 int main(int argc, char **argv)
 {
   int sockfd, newsockfd, clilen, chilpid, ok, nleft, nbwriten;
-  char c;
+  unsigned long int c;
+  unsigned long int c2;
   struct sockaddr_in cli_addr, serv_addr;
 
   if (argc != 3)
@@ -47,17 +49,12 @@ int main(int argc, char **argv)
     printf("socket error\n");
     exit(0);
   }
+  
+  int response;
+  recv(sockfd, &response, 4, 0);
+  close(sockfd);
+  long seconds = ntohl(response) - 2208988800U;
 
-  /* repete dans le socket tout ce qu'il entend */
-  while (1)
-  {
-    c = getchar();
-    write(sockfd, &c, 1);
-  }
-
-  /*  attention il s'agit d'une boucle infinie
-   *  le socket n'est jamais ferme !
-   */
-
+  printf("Time: %s", ctime(&seconds));
   return 1;
 }
